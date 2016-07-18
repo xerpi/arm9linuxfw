@@ -1,86 +1,120 @@
-typedef volatile unsigned int vu32;
+#include "types.h"
+#include "utils.h"
+#include "pxi.h"
+#include "draw.h"
+#include "hid.h"
+#include "i2c.h"
+#include "tmio.h"
 
-#define REG_IRQ_IE	(*(vu32 *)0x10001000)
-#define REG_IRQ_IF	(*(vu32 *)0x10001004)
+#define POWEROFF_MASK (BUTTON_L | BUTTON_R | BUTTON_DOWN | BUTTON_B)
 
-#define PXI_SYNC9	(*(vu32 *)0x10008000)
-#define PXI_CNT9	(*(vu32 *)0x10008004)
-#define PXI_SEND9	(*(vu32 *)0x10008008)
-#define PXI_RECV9	(*(vu32 *)0x1000800C)
-
-#define IRQ_PXI_SYNC		(1 << 12)
-#define IRQ_PXI_NOT_FULL	(1 << 13)
-#define IRQ_PXI_NOT_EMPTY	(1 << 14)
-
-static void arm9_enable_irq()
+static void mcu_poweroff()
 {
-	__asm__ volatile(
-		"mrs r0, cpsr\n\t"
-		"bic r0, r0, #0x80\n\t"
-		"msr cpsr_c, r0\n\t"
-		: : : "r0");
+	i2cWriteRegister(I2C_DEV_MCU, 0x20, 1 << 0);
+	while (1) ;
 }
 
-static void arm9_disable_irq()
+static void check_poweroff()
 {
-	__asm__ volatile(
-		"mrs r0, cpsr\n\t"
-		"orr r0, r0, #0x80\n\t"
-		"msr cpsr_c, r0\n\t"
-		: : : "r0");
-}
-
-static void arm9_set_regular_exception_vectors()
-{
-	__asm__ volatile(
-		"mrc p15, 0, r0, c1, c0, 0\n\t"
-		"bic r0, r0, #(1 << 13)\n\t"
-		"mcr p15, 0, r0, c1, c0, 0\n\t"
-		: : : "r0");
+	if ((BUTTON_HELD(HID_PAD, POWEROFF_MASK) & 0x7FF) == POWEROFF_MASK)
+		mcu_poweroff();
 }
 
 void __attribute__((interrupt("IRQ"))) interrupt_vector(void)
 {
-	register vu32 irq_if = REG_IRQ_IF;
+	register u32 irq_if = REG_IRQ_IF;
 
-	if (irq_if & IRQ_PXI_SYNC) {
+	/* if (irq_if & (IRQ_PXI_SYNC | IRQ_PXI_NOT_EMPTY | IRQ_PXI_NOT_FULL))
+		Debug("IRQ: 0x%08X", irq_if); */
+
+	if (irq_if & IRQ_SDIO_1) {
 		/* Acknowledge interrupt */
+		REG_IRQ_IF = IRQ_SDIO_1;
+		irq_if &= ~IRQ_SDIO_1;
+
+		/* Tell the TMIO controller that we have an interrupt */
+		sdio_1_irq = 1;
+	}
+
+	/*if (irq_if & IRQ_PXI_SYNC) {
 		REG_IRQ_IF = IRQ_PXI_SYNC;
 		irq_if &= ~IRQ_PXI_SYNC;
 	}
 
 	if (irq_if & IRQ_PXI_NOT_EMPTY) {
-		/* Acknowledge interrupt */
 		REG_IRQ_IF = IRQ_PXI_NOT_EMPTY;
 		irq_if &= ~IRQ_PXI_NOT_EMPTY;
+
+		do {
+			word = pxi_recv_fifo_pop();
+			Debug("wrd: 0x%08X  head: %d  tail: %d", word, pxi_recv_buf_head, pxi_recv_buf_tail);
+			*(uint32_t *)&pxi_recv_buf[pxi_recv_buf_head] = word;
+			pxi_recv_buf_head = (pxi_recv_buf_head + 4) % PXI_BUFFER_SIZE;
+			pxi_recv_buf_size += 4;
+		} while (!pxi_recv_fifo_is_empty() && (pxi_recv_buf_size + 4) < PXI_BUFFER_SIZE);
 	}
 
 	if (irq_if & IRQ_PXI_NOT_FULL) {
-		/* Acknowledge interrupt */
 		REG_IRQ_IF = IRQ_PXI_NOT_FULL;
 		irq_if &= ~IRQ_PXI_NOT_FULL;
-	}
+
+		do {
+			word = *(uint32_t *)&pxi_send_buf[pxi_send_buf_tail];
+			pxi_send_fifo_push(word);
+			pxi_send_buf_tail = (pxi_send_buf_tail + 4) % PXI_BUFFER_SIZE;
+			pxi_send_buf_size -= 4;
+		} while (!pxi_send_fifo_is_full() && pxi_send_buf_size > 4);
+	}*/
 
 	/* Acknowledge unhandled interrupts */
 	REG_IRQ_IF = irq_if;
 }
 
-int main()
+static u8 buf[TMIO_BBS] __attribute__((aligned(TMIO_BBS)));
+
+int main(void)
 {
+	u32 data;
+	u32 i;
+
+	ClearBot();
+	Debug("arm9linuxfw by xerpi");
+
 	arm9_disable_irq();
 	arm9_set_regular_exception_vectors();
+	arm9_disable_timers();
 
+	/* Disable all the interrupts */
+	REG_IRQ_IE = 0;
 	/* Acknowledge all the tnterrupts */
-	REG_IRQ_IE = ~0;
-	/* Enable all the tnterrupts */
 	REG_IRQ_IF = ~0;
+	/* Enable PXI and SD Interrupts */
+	REG_IRQ_IE = IRQ_PXI_SYNC | IRQ_PXI_NOT_FULL | IRQ_PXI_NOT_EMPTY |
+		IRQ_SDIO_1;
 
 	arm9_enable_irq();
 
-	unsigned char i = 0;
+	pxi_init();
+	tmio_init();
+	tmio_init_sdmc();
 
-	for (;;)
-		PXI_SYNC9 = (1 << 31) | (i++ << 8);
+	for (;;) {
+		while (pxi_recv_fifo_is_empty())
+			check_poweroff();
+
+		data = pxi_recv_fifo_pop();
+
+		tmio_readsectors(TMIO_DEV_SDMC, data, 1, buf);
+
+		for (i = 0; i < TMIO_BBS; i += 4) {
+			while (pxi_send_fifo_is_full())
+				;
+			pxi_send_fifo_push(*(uint32_t *)&buf[i]);
+		}
+
+		check_poweroff();
+	}
+
 
 	return 0;
 }

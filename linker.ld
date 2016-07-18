@@ -8,7 +8,7 @@ SECTIONS
 	.text       : { *(.text) }
 	.rodata     : { *(.rodata) }
 	.data       : { *(.data) }
-	.bss        : { *(.bss) }
+	.bss        : { *(.bss COMMON) }
 	. = ALIGN(0x1000);
 	.stack : {
 		. += 0x1000;
@@ -19,4 +19,5 @@ SECTIONS
 		. += 0x1000;
 		_irq_stack_end = .;
 	}
+	__end__ = ABSOLUTE(.);
 }

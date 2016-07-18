@@ -5,7 +5,8 @@ endif
 include $(DEVKITARM)/base_tools
 
 TARGET = $(notdir $(CURDIR))
-OBJS   = source/start.o source/main.o source/tmio.o source/delay.o
+OBJS   = source/start.o source/main.o source/tmio.o source/delay.o \
+	source/draw.o source/i2c.o source/utils.o source/pxi.o
 
 ARCH = -mcpu=arm946e-s -march=armv5te -mlittle-endian -mthumb-interwork
 ASFLAGS = $(ARCH) -x assembler-with-cpp
