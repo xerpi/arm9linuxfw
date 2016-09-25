@@ -2,6 +2,7 @@
 #define PXI_H
 
 #include "types.h"
+#include "pxi_cmd.h"
 
 #define REG_PXI_SYNC9	(*(vu32 *)0x10008000)
 #define REG_PXI_CNT9	(*(vu32 *)0x10008004)
@@ -21,33 +22,10 @@
 #define PXI_SYNC_TRIGGER_PXI_SYNC9	(1 << 30)
 #define PXI_SYNC_IRQ_ENABLE		(1 << 31)
 
-#define PXI_BUFFER_SIZE 512
-
-extern uint8_t pxi_recv_buf[PXI_BUFFER_SIZE];
-extern uint8_t pxi_send_buf[PXI_BUFFER_SIZE];
-extern uint32_t pxi_recv_buf_size;
-extern uint32_t pxi_send_buf_size;
-extern uint32_t pxi_recv_buf_head;
-extern uint32_t pxi_recv_buf_tail;
-extern uint32_t pxi_send_buf_head;
-extern uint32_t pxi_send_buf_tail;
-
 void pxi_init(void);
-
-/* Do not use these directly */
-void pxi_send_fifo_push(uint32_t word);
-uint32_t pxi_recv_fifo_pop(void);
-
-void pxi_send(uint32_t word);
-uint32_t pxi_recv(void);
-
-void pxi_send_buffer(const uint8_t *buffer, size_t size);
-void pxi_recv_buffer(uint8_t *buffer, size_t size);
-
-void pxi_send_fifo_flush(void);
-int pxi_send_fifo_is_empty();
-int pxi_send_fifo_is_full();
-int pxi_recv_fifo_is_empty();
-int pxi_recv_fifo_is_full();
+void pxi_deinit(void);
+void pxi_recv_cmd_hdr(struct pxi_cmd_hdr *cmd);
+void pxi_recv_buffer(void *data, u32 size);
+void pxi_send_cmd_response(struct pxi_cmd_hdr *cmd);
 
 #endif

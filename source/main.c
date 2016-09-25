@@ -20,6 +20,63 @@ static void check_poweroff()
 		mcu_poweroff();
 }
 
+static union {
+	struct pxi_cmd_hdr header;
+	u8 buffer[128];
+} pxi_work;
+
+static void reset_pxi_pending_work(void)
+{
+	pxi_work.header.cmd = PXI_CMD_NONE;
+}
+
+static void reset_pending_work(void)
+{
+	reset_pxi_pending_work();
+}
+
+static void do_pxi_cmd_ping_work(void)
+{
+	struct pxi_cmd_hdr *cmd =
+		(struct pxi_cmd_hdr *)&pxi_work;
+	struct pxi_cmd_hdr resp;
+	resp.cmd = cmd->cmd;
+	resp.len = 0;
+
+	pxi_send_cmd_response(&resp);
+	reset_pxi_pending_work();
+}
+
+static void do_pxi_cmd_sdmmc_read_sector_work(void)
+{
+	struct pxi_cmd_sdmmc_read_sector *cmd =
+		(struct pxi_cmd_sdmmc_read_sector *)&pxi_work;
+	struct pxi_cmd_hdr resp;
+	resp.cmd = cmd->header.cmd;
+	resp.len = 0;
+
+	//Debug("{sector = 0x%08X, paddr = 0x%08X}", cmd->sector, cmd->paddr);
+
+	tmio_readsectors(TMIO_DEV_SDMC, cmd->sector, 1, (void *)cmd->paddr);
+
+	pxi_send_cmd_response(&resp);
+	reset_pxi_pending_work();
+}
+
+static void check_pending_work(void)
+{
+	if (pxi_work.header.cmd != PXI_CMD_NONE) {
+		switch (pxi_work.header.cmd) {
+		case PXI_CMD_PING:
+			do_pxi_cmd_ping_work();
+			break;
+		case PXI_CMD_SDMMC_READ_SECTOR:
+			do_pxi_cmd_sdmmc_read_sector_work();
+			break;
+		}
+	}
+}
+
 void __attribute__((interrupt("IRQ"))) interrupt_vector(void)
 {
 	register u32 irq_if = REG_IRQ_IF;
@@ -36,12 +93,15 @@ void __attribute__((interrupt("IRQ"))) interrupt_vector(void)
 		sdio_1_irq = 1;
 	}
 
-	/*if (irq_if & IRQ_PXI_SYNC) {
+	if (irq_if & IRQ_PXI_SYNC) {
 		REG_IRQ_IF = IRQ_PXI_SYNC;
 		irq_if &= ~IRQ_PXI_SYNC;
+
+		pxi_recv_cmd_hdr(&pxi_work.header);
+		pxi_recv_buffer(pxi_work.header.data, pxi_work.header.len);
 	}
 
-	if (irq_if & IRQ_PXI_NOT_EMPTY) {
+	/*if (irq_if & IRQ_PXI_NOT_EMPTY) {
 		REG_IRQ_IF = IRQ_PXI_NOT_EMPTY;
 		irq_if &= ~IRQ_PXI_NOT_EMPTY;
 
@@ -70,13 +130,8 @@ void __attribute__((interrupt("IRQ"))) interrupt_vector(void)
 	REG_IRQ_IF = irq_if;
 }
 
-static u8 buf[TMIO_BBS] __attribute__((aligned(TMIO_BBS)));
-
 int main(void)
 {
-	u32 data;
-	u32 i;
-
 	ClearBot();
 	Debug("arm9linuxfw by xerpi");
 
@@ -92,6 +147,7 @@ int main(void)
 	REG_IRQ_IE = IRQ_PXI_SYNC | IRQ_PXI_NOT_FULL | IRQ_PXI_NOT_EMPTY |
 		IRQ_SDIO_1;
 
+	reset_pending_work();
 	arm9_enable_irq();
 
 	pxi_init();
@@ -99,7 +155,11 @@ int main(void)
 	tmio_init_sdmc();
 
 	for (;;) {
-		while (pxi_recv_fifo_is_empty())
+		//arm9_wfi();
+		check_pending_work();
+
+
+		/*while (pxi_recv_fifo_is_empty())
 			check_poweroff();
 
 		data = pxi_recv_fifo_pop();
@@ -110,7 +170,7 @@ int main(void)
 			while (pxi_send_fifo_is_full())
 				;
 			pxi_send_fifo_push(*(uint32_t *)&buf[i]);
-		}
+		}*/
 
 		check_poweroff();
 	}
