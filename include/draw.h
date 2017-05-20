@@ -2,6 +2,7 @@
 #define DRAW_H
 
 #include <stdint.h>
+#include "types.h"
 
 #define BYTES_PER_PIXEL 3
 #define SCREEN_WIDTH 240
@@ -11,22 +12,10 @@
 
 #define RGB(r,g,b) (r<<24|b<<16|g<<8|r)
 
-#define VRAM_BASE     (0x18000000)
-
-#define FB_TOP_SIZE           (400*240*3)
-#define FB_BOT_SIZE           (320*240*3)
-#define FB_BASE_PA            (VRAM_BASE)
-#define FB_TOP_LEFT1          (FB_BASE_PA)
-#define FB_TOP_LEFT2          (FB_TOP_LEFT1  + FB_TOP_SIZE)
-#define FB_TOP_RIGHT1         (FB_TOP_LEFT2  + FB_TOP_SIZE)
-#define FB_TOP_RIGHT2         (FB_TOP_RIGHT1 + FB_TOP_SIZE)
-#define FB_BOT_1              (FB_TOP_RIGHT2 + FB_TOP_SIZE)
-#define FB_BOT_2              (FB_BOT_1      + FB_BOT_SIZE)
-
-#define TOP_SCREEN0 (uint8_t *)(FB_TOP_LEFT1)
-#define TOP_SCREEN1 (uint8_t *)(FB_TOP_LEFT2)
-#define BOT_SCREEN0 (uint8_t *)(FB_BOT_1)
-#define BOT_SCREEN1 (uint8_t *)(FB_BOT_2)
+#define TOP_SCREEN0 (u8*)(*(u32*)0x23FFFE00)
+#define TOP_SCREEN1 (u8*)(*(u32*)0x23FFFE00)
+#define BOT_SCREEN0 (u8*)(*(u32*)0x23FFFE08)
+#define BOT_SCREEN1 (u8*)(*(u32*)0x23FFFE08)
 extern int current_y;
 
 void ClearScreen(unsigned char *screen, int color);

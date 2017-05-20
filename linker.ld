@@ -3,7 +3,7 @@ OUTPUT_ARCH(arm)
 
 SECTIONS
 {
-	. = 0x08000000;
+	. = 0x08080000;
 	.text.start : { *(.text.start) }
 	.text       : { *(.text) }
 	.rodata     : { *(.rodata) }
