@@ -65,30 +65,30 @@ static void do_pxi_cmd_sdmmc_read_sector_work(void)
 
 static void do_pxi_cmd_sdmmc_write_sector_work(void)
 {
-    struct pxi_cmd_sdmmc_write_sector *cmd =
-        (struct pxi_cmd_sdmmc_write_sector *)&pxi_work;
-    struct pxi_cmd_hdr resp;
-    resp.cmd = cmd->header.cmd;
-    resp.len = 0;
+	struct pxi_cmd_sdmmc_write_sector *cmd =
+		(struct pxi_cmd_sdmmc_write_sector *)&pxi_work;
+	struct pxi_cmd_hdr resp;
+	resp.cmd = cmd->header.cmd;
+	resp.len = 0;
 
-    tmio_writesectors(TMIO_DEV_SDMC, cmd->sector, 1, (void *)cmd->paddr);
+	tmio_writesectors(TMIO_DEV_SDMC, cmd->sector, 1, (void *)cmd->paddr);
 
-    pxi_send_cmd_response(&resp);
-    reset_pxi_pending_work();
+	pxi_send_cmd_response(&resp);
+	reset_pxi_pending_work();
 }
 
 static void do_pxi_cmd_sdmmc_get_size_work(void)
 {
-    struct pxi_cmd_hdr *cmd =
-        (struct pxi_cmd_hdr *)&pxi_work;
-    struct pxi_resp_sdmmc_get_size resp;
-    resp.header.cmd = cmd->cmd;
-    resp.header.len = 4;
+	struct pxi_cmd_hdr *cmd =
+		(struct pxi_cmd_hdr *)&pxi_work;
+	struct pxi_resp_sdmmc_get_size resp;
+	resp.header.cmd = cmd->cmd;
+	resp.header.len = 4;
 
-    resp.size = tmio_dev[TMIO_DEV_SDMC].total_size;
+	resp.size = tmio_dev[TMIO_DEV_SDMC].total_size;
 
-    pxi_send_cmd_response((struct pxi_cmd_hdr*)&resp);
-    reset_pxi_pending_work();
+	pxi_send_cmd_response((struct pxi_cmd_hdr*)&resp);
+	reset_pxi_pending_work();
 }
 
 static void check_pending_work(void)
@@ -101,12 +101,12 @@ static void check_pending_work(void)
 		case PXI_CMD_SDMMC_READ_SECTOR:
 			do_pxi_cmd_sdmmc_read_sector_work();
 			break;
-        case PXI_CMD_SDMMC_WRITE_SECTOR:
-            do_pxi_cmd_sdmmc_write_sector_work();
-            break;
-        case PXI_CMD_SDMMC_GET_SIZE:
-            do_pxi_cmd_sdmmc_get_size_work();
-            break;
+		case PXI_CMD_SDMMC_WRITE_SECTOR:
+			do_pxi_cmd_sdmmc_write_sector_work();
+			break;
+		case PXI_CMD_SDMMC_GET_SIZE:
+			do_pxi_cmd_sdmmc_get_size_work();
+			break;
 		}
 	}
 }
