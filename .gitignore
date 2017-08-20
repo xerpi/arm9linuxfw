@@ -1,0 +1,4 @@
+arm9linuxfw.bin
+*.elf
+*.o
+*.d
