@@ -6,10 +6,10 @@ include $(DEVKITARM)/base_tools
 
 TARGET	= $(notdir $(CURDIR))
 OBJS	= source/start.o source/main.o source/tmio.o source/delay.o \
-	source/draw.o source/i2c.o source/utils.o source/pxi.o
+	source/draw.o source/i2c.o source/utils.o source/pxi.o source/tiny-printf.o source/libc.o
 ARCH	= -mcpu=arm946e-s -march=armv5te -mlittle-endian -mthumb-interwork
 ASFLAGS	= $(ARCH) -x assembler-with-cpp
-CFLAGS 	= -Wall -O0 -fno-builtin -nostartfiles -fomit-frame-pointer $(ARCH) -Iinclude
+CFLAGS 	= -Wall -O0 -fno-builtin -nostartfiles -nostdlib -fomit-frame-pointer $(ARCH) -Iinclude
 DEPS	= $(OBJS:.o=.d)
 
 all: $(TARGET).bin
@@ -22,7 +22,7 @@ $(TARGET).elf: $(OBJS)
 	$(CC) -T linker.ld $(CFLAGS) $^ -o $@
 
 %.bin: %.elf
-	$(OBJCOPY) -O binary --set-section-flags .bss=alloc,load,contents $< $@
+	$(OBJCOPY) -S -O binary --set-section-flags .bss=alloc,load,contents $< $@
 
 .s.o:
 	$(CC) $(ASFLAGS) -MMD -MP -c $< -o $@
