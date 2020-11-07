@@ -164,10 +164,62 @@ void __attribute__((interrupt("IRQ"))) interrupt_vector(void)
 	REG_IRQ_IF = irq_if;
 }
 
+#define ARM_CP15_CACHE_PREPARE_MVA(mva) \
+	((const void *) (((uint32_t) (mva)) & ~0x1fU))
+
+void data_cache_invalidate_line(const volatile void *mva)
+{
+	mva = ARM_CP15_CACHE_PREPARE_MVA(mva);
+
+	asm volatile (
+	"mcr p15, 0, %[mva], c7, c6, 1\n"
+	:
+	: [mva] "r" (mva)
+	: "memory"
+	);
+}
+
+void data_cache_clean_line(const volatile void *mva)
+{
+	mva = ARM_CP15_CACHE_PREPARE_MVA(mva);
+
+	asm volatile (
+	"mcr p15, 0, %[mva], c7, c10, 1\n"
+	:
+	: [mva] "r" (mva)
+	: "memory"
+	);
+}
+
+static inline int isalpha(int c)
+{
+	return ((unsigned)c | 32) - 'a' < 26;
+}
+
+static inline int isdigit(int c)
+{
+	return (unsigned)c - '0' < 10;
+}
+
+static inline int isalnum(int c)
+{
+	return isalpha(c) || isdigit(c);
+}
+
+static inline int isprint(int c)
+{
+	return (unsigned)c-0x20 < 0x5f;
+}
+
+
+extern void ClearTop(unsigned char *screen, int color);
 int main(void)
 {
 	ClearBot();
+	ClearTop(TOP_SCREEN0, RGB(255, 255, 255));
+	ClearTop(TOP_SCREEN1, RGB(255, 255, 255));
 	Debug("arm9linuxfw by xerpi");
+	Debug("Linux LL debug");
 
 	arm9_disable_irq();
 	arm9_set_regular_exception_vectors();
@@ -188,10 +240,48 @@ int main(void)
 	tmio_init();
 	tmio_init_sdmc();
 
+	#define ARM9_FW_SHARED_BUF_PA (0x27000000)
+	*(volatile char *)ARM9_FW_SHARED_BUF_PA = 0;
+	data_cache_clean_line((void *)ARM9_FW_SHARED_BUF_PA);
+
+	int x = 2, y = 2;
+
 	for (;;) {
 		//arm9_wfi();
 		check_pending_work();
 
+		volatile char *p = (char *)ARM9_FW_SHARED_BUF_PA;
+		data_cache_invalidate_line(p);
+		char c = *p;
+		if (c != 0) {
+			if (isprint(c)) {
+				DrawCharacter(TOP_SCREEN0, c, x, y, RGB(0, 0, 0), RGB(255, 255, 255));
+				DrawCharacter(TOP_SCREEN1, c, x, y, RGB(0, 0, 0), RGB(255, 255, 255));
+
+				x += 8;
+				if (x > 400) {
+					x = 2;
+					y += 8;
+					DrawString(TOP_SCREEN0, "___________________________________________", x, y+8, RGB(0, 0, 0), RGB(255, 255, 255));
+					DrawString(TOP_SCREEN0, "___________________________________________", x, y+8, RGB(0, 0, 0), RGB(255, 255, 255));
+				}
+				if (y > 240) {
+					y = 2;
+				}
+			} else if (c == '\n') {
+				x = 2;
+				y += 8;
+				DrawString(TOP_SCREEN0, "___________________________________________", x, y+8, RGB(0, 0, 0), RGB(255, 255, 255));
+				DrawString(TOP_SCREEN0, "___________________________________________", x, y+8, RGB(0, 0, 0), RGB(255, 255, 255));
+			}
+
+			//volatile int i = 0;
+			//for (i = 0; i < 50000; i++)
+			//	;
+
+			*p = 0;
+			data_cache_clean_line(p);
+		}
 
 		/*while (pxi_recv_fifo_is_empty())
 			check_poweroff();

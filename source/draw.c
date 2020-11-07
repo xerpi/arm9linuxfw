@@ -85,3 +85,14 @@ void ClearBot()
 	ClearScreen(BOT_SCREEN1, RGB(255, 255, 255));
 	current_y = 0;
 }
+
+void ClearTop(unsigned char *screen, int color)
+{
+    int i;
+    unsigned char *screenPos = screen;
+    for (i = 0; i < (SCREEN_HEIGHT * 400); i++) {
+        *(screenPos++) = color >> 16;  // B
+        *(screenPos++) = color >> 8;   // G
+        *(screenPos++) = color & 0xFF; // R
+    }
+}
